@@ -1,5 +1,6 @@
 use crate::{base::decode_event, stream::EventStream, ContractError};
 
+use ethers_core::types::Address;
 use ethers_core::{
     abi::{Detokenize, Event as AbiEvent},
     types::{BlockNumber, Filter, Log, TxHash, ValueOrArray, H256, U64},
@@ -84,6 +85,30 @@ where
             Box::new(move |log| self.parse_log(log)),
         ))
     }
+
+    /// Returns a stream for the event
+    pub async fn stream_with_meta(
+        &'a self,
+    ) -> Result<
+        // Wraps the FilterWatcher with a mapping to the event
+        EventStream<'a, FilterWatcher<'a, M::Provider, Log>, (D, LogMeta), ContractError<M>>,
+        ContractError<M>,
+    > {
+        let filter = self
+            .provider
+            .watch(&self.filter)
+            .await
+            .map_err(ContractError::MiddlewareError)?;
+        Ok(EventStream::new(
+            filter.id,
+            filter,
+            Box::new(move |log| {
+                let meta = LogMeta::from(&log);
+                let event = self.parse_log(log)?;
+                Ok((event, meta))
+            }),
+        ))
+    }
 }
 
 impl<'a, 'b, M, D> Event<'a, 'b, M, D>
@@ -109,6 +134,30 @@ where
             filter.id,
             filter,
             Box::new(move |log| self.parse_log(log)),
+        ))
+    }
+
+    /// Returns a subscription for the event
+    pub async fn subscribe_with_meta(
+        &'a self,
+    ) -> Result<
+        // Wraps the SubscriptionStream with a mapping to the event
+        EventStream<'a, SubscriptionStream<'a, M::Provider, Log>, (D, LogMeta), ContractError<M>>,
+        ContractError<M>,
+    > {
+        let filter = self
+            .provider
+            .subscribe_logs(&self.filter)
+            .await
+            .map_err(ContractError::MiddlewareError)?;
+        Ok(EventStream::new(
+            filter.id,
+            filter,
+            Box::new(move |log| {
+                let meta = LogMeta::from(&log);
+                let event = self.parse_log(log)?;
+                Ok((event, meta))
+            }),
         ))
     }
 }
@@ -165,6 +214,9 @@ pub struct LogMeta {
 
     /// The transaction hash in which the log was emitted
     pub transaction_hash: TxHash,
+
+    /// The address which produces the log.
+    pub address: Address,
 }
 
 impl From<&Log> for LogMeta {
@@ -172,6 +224,7 @@ impl From<&Log> for LogMeta {
         LogMeta {
             block_number: src.block_number.expect("should have a block number"),
             transaction_hash: src.transaction_hash.expect("should have a tx hash"),
+            address: src.address,
         }
     }
 }
