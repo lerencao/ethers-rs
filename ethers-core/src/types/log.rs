@@ -72,9 +72,7 @@ pub struct Filter {
     pub to_block: Option<BlockNumber>,
 
     /// Address
-    // TODO: The spec says that this can also be an array, do we really want to
-    // monitor for the same event for multiple contracts?
-    address: Option<Address>,
+    address: Option<Vec<Address>>,
 
     /// Topics
     // TODO: We could improve the low level API here by using ethabi's RawTopicFilter
@@ -100,7 +98,11 @@ impl Serialize for Filter {
         }
 
         if let Some(ref address) = self.address {
-            s.serialize_field("address", address)?;
+            if address.len() == 1 {
+                s.serialize_field("address", &address[0])?;
+            } else if address.len() > 1 {
+                s.serialize_field("address", address)?;
+            }
         }
 
         let mut filtered_topics = Vec::new();
@@ -141,8 +143,15 @@ impl Filter {
         self
     }
 
+    /// match events of this address.
     pub fn address<T: Into<Address>>(mut self, address: T) -> Self {
-        self.address = Some(address.into());
+        self.address = Some(vec![address.into()]);
+        self
+    }
+
+    /// match events produced by one of these addresses.  
+    pub fn addresses<T: Into<Vec<Address>>>(mut self, addresses: T) -> Self {
+        self.address = Some(addresses.into());
         self
     }
 
