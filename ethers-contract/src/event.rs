@@ -64,7 +64,7 @@ impl<M, D: Detokenize> Event<'_, '_, M, D> {
 impl<'a, 'b, M, D> Event<'a, 'b, M, D>
 where
     M: Middleware,
-    D: 'b + Detokenize + Clone,
+    D: 'b + Detokenize + Clone + Sync,
 {
     /// Returns a stream for the event
     pub async fn stream(
@@ -115,7 +115,7 @@ impl<'a, 'b, M, D> Event<'a, 'b, M, D>
 where
     M: Middleware,
     <M as Middleware>::Provider: PubsubClient,
-    D: 'b + Detokenize + Clone,
+    D: 'b + Detokenize + Clone + Sync,
 {
     /// Returns a subscription for the event
     pub async fn subscribe(
@@ -165,7 +165,7 @@ where
 impl<M, D> Event<'_, '_, M, D>
 where
     M: Middleware,
-    D: Detokenize + Clone,
+    D: Detokenize + Clone + Sync,
 {
     /// Queries the blockchain for the selected filter and returns a vector of matching
     /// event logs
