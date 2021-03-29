@@ -118,7 +118,7 @@ impl<M, D: EthLogDecode> Event<'_, M, D> {
 impl<'a, M, D> Event<'a, M, D>
 where
     M: Middleware,
-    D: EthLogDecode,
+    D: EthLogDecode + Sync,
 {
     /// Returns a stream for the event
     pub async fn stream(
@@ -169,7 +169,7 @@ impl<'a, M, D> Event<'a, M, D>
 where
     M: Middleware,
     <M as Middleware>::Provider: PubsubClient,
-    D: EthLogDecode,
+    D: EthLogDecode + Sync,
 {
     /// Returns a subscription for the event
     pub async fn subscribe(
@@ -219,7 +219,7 @@ where
 impl<M, D> Event<'_, M, D>
 where
     M: Middleware,
-    D: EthLogDecode,
+    D: EthLogDecode + Sync,
 {
     /// Queries the blockchain for the selected filter and returns a vector of matching
     /// event logs
