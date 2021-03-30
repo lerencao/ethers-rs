@@ -42,6 +42,7 @@ tokio-tungstenite = { version = "0.13.0", default-features = false, features = [
 tokio-util = { version = "0.6.6", default-features = false, features = ["io"], optional = true }
 bytes = { version  = "1.0.1", default-features = false, optional = true }
 
+log = "~0.4"
 [dev-dependencies]
 ethers = { version = "0.2", path = "../ethers" }
 tokio = { version = "1.5", default-features = false, features = ["rt", "macros"] }
