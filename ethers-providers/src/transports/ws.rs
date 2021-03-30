@@ -1,11 +1,10 @@
 use crate::{
     provider::ProviderError,
-    transports::common::{JsonRpcError, Notification, Request, Response},
+    transports::common::{JsonRpcError, Notification, Request, Response, ResponseData},
     JsonRpcClient, PubsubClient,
 };
-use ethers_core::types::U256;
-
 use async_trait::async_trait;
+use ethers_core::types::U256;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{
     sink::{Sink, SinkExt},
@@ -42,7 +41,7 @@ pub struct Ws {
     requests: mpsc::UnboundedSender<TransportMessage>,
 }
 
-type Pending = oneshot::Sender<serde_json::Value>;
+type Pending = oneshot::Sender<ResponseData<serde_json::Value>>;
 type Subscription = mpsc::UnboundedSender<serde_json::Value>;
 
 enum TransportMessage {
@@ -130,7 +129,7 @@ impl JsonRpcClient for Ws {
         let res = receiver.await?;
 
         // parse it
-        Ok(serde_json::from_value(res)?)
+        Ok(serde_json::from_value(res.into_result()?)?)
     }
 }
 
@@ -252,7 +251,10 @@ where
 
     async fn handle_ws(&mut self, resp: Message) -> Result<(), ClientError> {
         match resp {
-            Message::Text(inner) => self.handle_text(inner).await,
+            Message::Text(inner) => {
+                self.handle_text(inner);
+                Ok(())
+            }
             Message::Ping(inner) => self.handle_ping(inner).await,
             Message::Pong(_) => Ok(()), // Server is allowed to send unsolicited pongs.
             _ => Err(ClientError::NoResponse),
@@ -264,30 +266,40 @@ where
         Ok(())
     }
 
-    async fn handle_text(&mut self, inner: String) -> Result<(), ClientError> {
+    fn handle_text(&mut self, inner: String) {
         if let Ok(resp) = serde_json::from_str::<Response<serde_json::Value>>(&inner) {
             if let Some(request) = self.pending.remove(&resp.id) {
-                request
-                    .send(resp.data.into_result()?)
-                    .map_err(to_client_error)?;
+                if let Err(e) = request.send(resp.data) {
+                    log::error!(
+                        "response channel closed. id: {}, {:?}",
+                        &resp.id,
+                        to_client_error(e)
+                    );
+                }
             }
         } else if let Ok(notification) =
             serde_json::from_str::<Notification<serde_json::Value>>(&inner)
         {
             let id = notification.params.subscription;
+            let mut close_subscription = false;
             if let Some(stream) = self.subscriptions.get(&id) {
-                stream
-                    .unbounded_send(notification.params.result)
-                    .map_err(to_client_error)?;
+                if let Err(e) = stream.unbounded_send(notification.params.result) {
+                    log::error!("subscription channel error. id: {}, error: {:?}", &id, e);
+                    close_subscription = true;
+                }
             }
+            if close_subscription {
+                let _ = self.subscriptions.remove(&id);
+            }
+        } else {
+            log::warn!("ignore unknown message: {}", &inner);
         }
-        Ok(())
     }
 }
 
 // TrySendError is private :(
-fn to_client_error<T: ToString>(err: T) -> ClientError {
-    ClientError::ChannelError(err.to_string())
+fn to_client_error<T: Debug>(err: T) -> ClientError {
+    ClientError::ChannelError(format!("{:?}", err))
 }
 
 #[derive(Error, Debug)]

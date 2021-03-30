@@ -40,6 +40,7 @@ tracing-futures = { version = "0.2.5", default-features = false }
 tokio = { version = "1.2", default-features = false, optional = true }
 tokio-tungstenite = { version = "0.13.0", default-features = false, features = ["connect", "tls"], optional = true }
 
+log = "~0.4"
 [dev-dependencies]
 ethers = { version = "0.2", path = "../ethers" }
 tokio = { version = "1.2", default-features = false, features = ["rt", "macros"] }

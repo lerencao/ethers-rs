@@ -742,6 +742,7 @@ dependencies = [
  "futures-timer",
  "futures-util",
  "hex",
+ "log",
  "pin-project",
  "reqwest",
  "serde",
