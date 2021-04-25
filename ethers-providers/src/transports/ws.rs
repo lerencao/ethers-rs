@@ -258,7 +258,13 @@ where
             }
             Message::Ping(inner) => self.handle_ping(inner).await,
             Message::Pong(_) => Ok(()), // Server is allowed to send unsolicited pongs.
-            _ => Err(ClientError::NoResponse),
+            Message::Close(c) => {
+                log::error!("receive close msg from peer, reason: {:?}", c);
+                Err(ClientError::TungsteniteError(
+                    tokio_tungstenite::tungstenite::Error::ConnectionClosed,
+                ))
+            }
+            Message::Binary(_) => Err(ClientError::NoResponse),
         }
     }
 
