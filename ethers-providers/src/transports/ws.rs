@@ -264,10 +264,16 @@ where
                     tokio_tungstenite::tungstenite::Error::ConnectionClosed,
                 ))
             }
-            Message::Binary(b) => {
-                log::error!("unexpected binary message, {:?}", b);
-                Err(ClientError::NoResponse)
-            }
+            Message::Binary(b) => match String::from_utf8(b) {
+                Ok(text) => {
+                    self.handle_text(text);
+                    Ok(())
+                }
+                Err(e) => {
+                    log::error!("unexpected binary message, {:?}", e.as_bytes());
+                    Err(ClientError::NoResponse)
+                }
+            },
         }
     }
 
