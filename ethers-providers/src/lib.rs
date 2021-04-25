@@ -80,6 +80,9 @@ pub use stream::{interval, FilterWatcher, DEFAULT_POLL_INTERVAL};
 mod pubsub;
 pub use pubsub::{PubsubClient, SubscriptionStream};
 
+mod types;
+pub use types::Id;
+
 use async_trait::async_trait;
 use auto_impl::auto_impl;
 use serde::{de::DeserializeOwned, Serialize};
@@ -520,7 +523,7 @@ pub trait Middleware: Sync + Send + Debug {
 
     async fn unsubscribe<T>(&self, id: T) -> Result<bool, Self::Error>
     where
-        T: Into<U256> + Send + Sync,
+        T: Into<Id> + Send + Sync,
         <Self as Middleware>::Provider: PubsubClient,
     {
         self.inner().unsubscribe(id).await.map_err(FromErr::from)

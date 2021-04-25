@@ -1,6 +1,4 @@
-use crate::{JsonRpcClient, Middleware, Provider};
-
-use ethers_core::types::U256;
+use crate::{Id, JsonRpcClient, Middleware, Provider};
 
 use futures_util::stream::Stream;
 use pin_project::{pin_project, pinned_drop};
@@ -18,10 +16,10 @@ pub trait PubsubClient: JsonRpcClient {
     type NotificationStream: futures_core::Stream<Item = Value>;
 
     /// Add a subscription to this transport
-    fn subscribe<T: Into<U256>>(&self, id: T) -> Result<Self::NotificationStream, Self::Error>;
+    fn subscribe<T: Into<Id>>(&self, id: T) -> Result<Self::NotificationStream, Self::Error>;
 
     /// Remove a subscription from this transport
-    fn unsubscribe<T: Into<U256>>(&self, id: T) -> Result<(), Self::Error>;
+    fn unsubscribe<T: Into<Id>>(&self, id: T) -> Result<(), Self::Error>;
 }
 
 #[must_use = "subscriptions do nothing unless you stream them"]
@@ -29,7 +27,7 @@ pub trait PubsubClient: JsonRpcClient {
 /// Streams data from an installed filter via `eth_subscribe`
 pub struct SubscriptionStream<'a, P: PubsubClient, R: DeserializeOwned> {
     /// The subscription's installed id on the ethereum node
-    pub id: U256,
+    pub id: Id,
 
     provider: &'a Provider<P>,
 
@@ -45,9 +43,10 @@ where
     R: DeserializeOwned,
 {
     /// Creates a new subscription stream for the provided subscription id
-    pub fn new(id: U256, provider: &'a Provider<P>) -> Result<Self, P::Error> {
+    pub fn new<T: Into<Id>>(id: T, provider: &'a Provider<P>) -> Result<Self, P::Error> {
+        let id = id.into();
         // Call the underlying PubsubClient's subscribe
-        let rx = provider.as_ref().subscribe(id)?;
+        let rx = provider.as_ref().subscribe(id.clone())?;
         Ok(Self {
             id,
             provider,
@@ -58,7 +57,7 @@ where
 
     /// Unsubscribes from the subscription
     pub async fn unsubscribe(&self) -> Result<bool, crate::ProviderError> {
-        self.provider.unsubscribe(self.id).await
+        self.provider.unsubscribe(self.id.clone()).await
     }
 }
 
@@ -94,6 +93,6 @@ where
         // on drop it removes the handler from the websocket so that it stops
         // getting populated. We need to call `unsubscribe` explicitly to cancel
         // the subscription
-        let _ = (*self.provider).as_ref().unsubscribe(self.id);
+        let _ = (*self.provider).as_ref().unsubscribe(self.id.clone());
     }
 }

@@ -2,7 +2,7 @@ use crate::{
     ens,
     pubsub::{PubsubClient, SubscriptionStream},
     stream::{FilterWatcher, DEFAULT_POLL_INTERVAL},
-    FromErr, Http as HttpProvider, JsonRpcClient, MockProvider, PendingTransaction,
+    FromErr, Http as HttpProvider, Id, JsonRpcClient, MockProvider, PendingTransaction,
 };
 
 use ethers_core::{
@@ -609,13 +609,13 @@ impl<P: JsonRpcClient> Middleware for Provider<P> {
         R: DeserializeOwned + Send + Sync,
         P: PubsubClient,
     {
-        let id: U256 = self.request("eth_subscribe", params).await?;
+        let id: Id = self.request("eth_subscribe", params).await?;
         SubscriptionStream::new(id, self).map_err(Into::into)
     }
 
     async fn unsubscribe<T>(&self, id: T) -> Result<bool, ProviderError>
     where
-        T: Into<U256> + Send + Sync,
+        T: Into<Id> + Send + Sync,
         P: PubsubClient,
     {
         self.request("eth_unsubscribe", [id.into()]).await

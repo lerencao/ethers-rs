@@ -72,7 +72,7 @@ impl JsonRpcClient for Provider {
         let next_id = self.id.load(Ordering::SeqCst) + 1;
         self.id.store(next_id, Ordering::SeqCst);
 
-        let payload = Request::new(next_id, method, params);
+        let payload = Request::new(next_id.into(), method, params);
 
         let res = self
             .client

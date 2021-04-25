@@ -1,4 +1,5 @@
-use ethers_core::types::{Log, U256};
+use ethers_core::types::Log;
+use ethers_providers::Id;
 use futures_util::stream::{Stream, StreamExt};
 use pin_project::pin_project;
 use std::pin::Pin;
@@ -13,15 +14,19 @@ type MapEvent<'a, R, E> = Box<dyn Fn(Log) -> Result<R, E> + Send + 'a>;
 /// We use this wrapper type instead of `StreamExt::map` in order to preserve
 /// information about the filter/subscription's id.
 pub struct EventStream<'a, T, R, E> {
-    pub id: U256,
+    pub id: Id,
     #[pin]
     stream: T,
     parse: MapEvent<'a, R, E>,
 }
 
 impl<'a, T, R, E> EventStream<'a, T, R, E> {
-    pub fn new(id: U256, stream: T, parse: MapEvent<'a, R, E>) -> Self {
-        Self { id, stream, parse }
+    pub fn new(id: impl Into<Id>, stream: T, parse: MapEvent<'a, R, E>) -> Self {
+        Self {
+            id: id.into(),
+            stream,
+            parse,
+        }
     }
 }
 
