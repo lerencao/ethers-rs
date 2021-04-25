@@ -1,5 +1,6 @@
 // Code adapted from: https://github.com/althea-net/guac_rs/tree/master/web3/src/jsonrpc
-use ethers_core::types::U256;
+use crate::Id;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fmt;
@@ -33,7 +34,7 @@ fn is_zst<T>(_t: &T) -> bool {
 #[derive(Serialize, Deserialize, Debug)]
 /// A JSON-RPC request
 pub struct Request<'a, T> {
-    id: u64,
+    id: Id,
     jsonrpc: &'a str,
     method: &'a str,
     #[serde(skip_serializing_if = "is_zst")]
@@ -50,13 +51,13 @@ pub struct Notification<R> {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Subscription<R> {
-    pub subscription: U256,
+    pub subscription: Id,
     pub result: R,
 }
 
 impl<'a, T> Request<'a, T> {
     /// Creates a new JSON RPC request
-    pub fn new(id: u64, method: &'a str, params: T) -> Self {
+    pub fn new(id: Id, method: &'a str, params: T) -> Self {
         Self {
             id,
             jsonrpc: "2.0",
@@ -68,7 +69,7 @@ impl<'a, T> Request<'a, T> {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Response<T> {
-    pub(crate) id: u64,
+    pub(crate) id: Id,
     jsonrpc: String,
     #[serde(flatten)]
     pub data: ResponseData<T>,
@@ -99,19 +100,19 @@ mod tests {
     fn deser_response() {
         let response: Response<u64> =
             serde_json::from_str(r#"{"jsonrpc": "2.0", "result": 19, "id": 1}"#).unwrap();
-        assert_eq!(response.id, 1);
+        assert_eq!(response.id, 1.into());
         assert_eq!(response.data.into_result().unwrap(), 19);
     }
 
     #[test]
     fn ser_request() {
-        let request: Request<()> = Request::new(300, "method_name", ());
+        let request: Request<()> = Request::new(300.into(), "method_name", ());
         assert_eq!(
             &serde_json::to_string(&request).unwrap(),
             r#"{"id":300,"jsonrpc":"2.0","method":"method_name"}"#
         );
 
-        let request: Request<u32> = Request::new(300, "method_name", 1);
+        let request: Request<u32> = Request::new(300.into(), "method_name", 1);
         assert_eq!(
             &serde_json::to_string(&request).unwrap(),
             r#"{"id":300,"jsonrpc":"2.0","method":"method_name","params":1}"#

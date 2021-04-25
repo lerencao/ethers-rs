@@ -1,10 +1,10 @@
 use crate::{
     provider::ProviderError,
     transports::common::{JsonRpcError, Notification, Request, Response, ResponseData},
-    JsonRpcClient, PubsubClient,
+    Id, JsonRpcClient, PubsubClient,
 };
 use async_trait::async_trait;
-use ethers_core::types::U256;
+
 use futures_channel::{mpsc, oneshot};
 use futures_util::{
     sink::{Sink, SinkExt},
@@ -47,16 +47,16 @@ type Subscription = mpsc::UnboundedSender<serde_json::Value>;
 
 enum TransportMessage {
     Request {
-        id: u64,
+        id: Id,
         request: String,
         sender: Pending,
     },
     Subscribe {
-        id: U256,
+        id: Id,
         sink: Subscription,
     },
     Unsubscribe {
-        id: U256,
+        id: Id,
     },
 }
 
@@ -114,10 +114,11 @@ impl JsonRpcClient for Ws {
     ) -> Result<R, ClientError> {
         let next_id = self.id.fetch_add(1, Ordering::SeqCst);
 
+        let next_id: Id = next_id.into();
         // send the message
         let (sender, receiver) = oneshot::channel();
         let payload = TransportMessage::Request {
-            id: next_id,
+            id: next_id.clone(),
             request: serde_json::to_string(&Request::new(next_id, method, params))?,
             sender,
         };
@@ -136,7 +137,7 @@ impl JsonRpcClient for Ws {
 impl PubsubClient for Ws {
     type NotificationStream = mpsc::UnboundedReceiver<serde_json::Value>;
 
-    fn subscribe<T: Into<U256>>(&self, id: T) -> Result<Self::NotificationStream, ClientError> {
+    fn subscribe<T: Into<Id>>(&self, id: T) -> Result<Self::NotificationStream, ClientError> {
         let (sink, stream) = mpsc::unbounded();
         self.send(TransportMessage::Subscribe {
             id: id.into(),
@@ -145,7 +146,7 @@ impl PubsubClient for Ws {
         Ok(stream)
     }
 
-    fn unsubscribe<T: Into<U256>>(&self, id: T) -> Result<(), ClientError> {
+    fn unsubscribe<T: Into<Id>>(&self, id: T) -> Result<(), ClientError> {
         self.send(TransportMessage::Unsubscribe { id: id.into() })
     }
 }
@@ -154,8 +155,8 @@ struct WsServer<S> {
     ws: Fuse<S>,
     requests: Fuse<mpsc::UnboundedReceiver<TransportMessage>>,
 
-    pending: BTreeMap<u64, Pending>,
-    subscriptions: BTreeMap<U256, Subscription>,
+    pending: BTreeMap<Id, Pending>,
+    subscriptions: BTreeMap<Id, Subscription>,
 }
 
 impl<S> WsServer<S>
@@ -222,7 +223,7 @@ where
                 request,
                 sender,
             } => {
-                if self.pending.insert(id, sender).is_some() {
+                if self.pending.insert(id.clone(), sender).is_some() {
                     warn!("Replacing a pending request with id {:?}", id);
                 }
 
@@ -232,7 +233,7 @@ where
                 }
             }
             TransportMessage::Subscribe { id, sink } => {
-                if self.subscriptions.insert(id, sink).is_some() {
+                if self.subscriptions.insert(id.clone(), sink).is_some() {
                     warn!("Replacing already-registered subscription with id {:?}", id);
                 }
             }
@@ -359,8 +360,8 @@ mod tests {
 
         // Subscribing requires sending the sub request and then subscribing to
         // the returned sub_id
-        let sub_id: U256 = ws.request("eth_subscribe", ["newHeads"]).await.unwrap();
-        let mut stream = ws.subscribe(sub_id).unwrap();
+        let sub_id: Id = ws.request("eth_subscribe", ["newHeads"]).await.unwrap();
+        let mut stream = ws.subscribe(sub_id.clone()).unwrap();
 
         let mut blocks = Vec::new();
         for _ in 0..3 {

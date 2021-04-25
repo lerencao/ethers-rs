@@ -134,7 +134,7 @@ where
             .await
             .map_err(ContractError::MiddlewareError)?;
         Ok(EventStream::new(
-            filter.id,
+            filter.id.as_u64(),
             filter,
             Box::new(move |log| self.parse_log(log)),
         ))
@@ -154,7 +154,7 @@ where
             .await
             .map_err(ContractError::MiddlewareError)?;
         Ok(EventStream::new(
-            filter.id,
+            filter.id.as_u64(),
             filter,
             Box::new(move |log| {
                 let meta = LogMeta::from(&log);
@@ -185,7 +185,7 @@ where
             .await
             .map_err(ContractError::MiddlewareError)?;
         Ok(EventStream::new(
-            filter.id,
+            filter.id.clone(),
             filter,
             Box::new(move |log| self.parse_log(log)),
         ))
@@ -205,7 +205,7 @@ where
             .await
             .map_err(ContractError::MiddlewareError)?;
         Ok(EventStream::new(
-            filter.id,
+            filter.id.clone(),
             filter,
             Box::new(move |log| {
                 let meta = LogMeta::from(&log);

@@ -1,10 +1,8 @@
 use crate::{
     provider::ProviderError,
     transports::common::{JsonRpcError, Notification, Request, Response},
-    JsonRpcClient, PubsubClient,
+    Id, JsonRpcClient, PubsubClient,
 };
-use ethers_core::types::U256;
-
 use async_trait::async_trait;
 use futures_channel::mpsc;
 use futures_util::stream::{Fuse, StreamExt};
@@ -38,16 +36,16 @@ type Subscription = mpsc::UnboundedSender<serde_json::Value>;
 #[derive(Debug)]
 enum TransportMessage {
     Request {
-        id: u64,
+        id: Id,
         request: String,
         sender: Pending,
     },
     Subscribe {
-        id: U256,
+        id: Id,
         sink: Subscription,
     },
     Unsubscribe {
-        id: U256,
+        id: Id,
     },
 }
 
@@ -86,12 +84,12 @@ impl JsonRpcClient for Ipc {
         method: &str,
         params: T,
     ) -> Result<R, IpcError> {
-        let next_id = self.id.fetch_add(1, Ordering::SeqCst);
+        let next_id: Id = self.id.fetch_add(1, Ordering::SeqCst).into();
 
         // Create the request and initialize the response channel
         let (sender, receiver) = oneshot::channel();
         let payload = TransportMessage::Request {
-            id: next_id,
+            id: next_id.clone(),
             request: serde_json::to_string(&Request::new(next_id, method, params))?,
             sender,
         };
@@ -110,7 +108,7 @@ impl JsonRpcClient for Ipc {
 impl PubsubClient for Ipc {
     type NotificationStream = mpsc::UnboundedReceiver<serde_json::Value>;
 
-    fn subscribe<T: Into<U256>>(&self, id: T) -> Result<Self::NotificationStream, IpcError> {
+    fn subscribe<T: Into<Id>>(&self, id: T) -> Result<Self::NotificationStream, IpcError> {
         let (sink, stream) = mpsc::unbounded();
         self.send(TransportMessage::Subscribe {
             id: id.into(),
@@ -119,7 +117,7 @@ impl PubsubClient for Ipc {
         Ok(stream)
     }
 
-    fn unsubscribe<T: Into<U256>>(&self, id: T) -> Result<(), IpcError> {
+    fn unsubscribe<T: Into<Id>>(&self, id: T) -> Result<(), IpcError> {
         self.send(TransportMessage::Unsubscribe { id: id.into() })
     }
 }
@@ -128,8 +126,8 @@ struct IpcServer<T> {
     socket_reader: Fuse<ReaderStream<ReadHalf<T>>>,
     socket_writer: WriteHalf<T>,
     requests: Fuse<mpsc::UnboundedReceiver<TransportMessage>>,
-    pending: HashMap<u64, Pending>,
-    subscriptions: HashMap<U256, Subscription>,
+    pending: HashMap<Id, Pending>,
+    subscriptions: HashMap<Id, Subscription>,
 }
 
 impl<T> IpcServer<T>
@@ -202,7 +200,7 @@ where
                 request,
                 sender,
             } => {
-                if self.pending.insert(id, sender).is_some() {
+                if self.pending.insert(id.clone(), sender).is_some() {
                     warn!("Replacing a pending request with id {:?}", id);
                 }
 
@@ -212,8 +210,11 @@ where
                 }
             }
             TransportMessage::Subscribe { id, sink } => {
-                if self.subscriptions.insert(id, sink).is_some() {
-                    warn!("Replacing already-registered subscription with id {:?}", id);
+                if self.subscriptions.insert(id.clone(), sink).is_some() {
+                    warn!(
+                        "Replacing already-registered subscription with id {:?}",
+                        &id
+                    );
                 }
             }
             TransportMessage::Unsubscribe { id } => {
@@ -362,7 +363,7 @@ mod test {
         let _geth = Geth::new().block_time(2u64).ipc_path(&path).spawn();
         let ipc = Ipc::connect(path).await.unwrap();
 
-        let sub_id: U256 = ipc.request("eth_subscribe", ["newHeads"]).await.unwrap();
+        let sub_id: Id = ipc.request("eth_subscribe", ["newHeads"]).await.unwrap();
         let mut stream = ipc.subscribe(sub_id).unwrap();
 
         // Subscribing requires sending the sub request and then subscribing to
